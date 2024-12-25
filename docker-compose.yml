@@ -1,0 +1,70 @@
+version: '3.8'
+services:
+  postgres_master:
+    image: postgres:16-alpine
+    container_name: postgres_master
+    ports:
+      - '5433:5432'
+    volumes:
+      - C:\\postgres\\postgres_master_data:/var/lib/postgresql/data
+      - C:\\postgres\\pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - C:\\postgres\\postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: qwertyu
+      POSTGRES_DB: auth_db
+      POSTGRES_HOST_AUTH_METHOD: "scram-sha-256\nhost replication all 0.0.0.0/0 md5"
+      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256'
+      TZ: Asia/Vientiane
+      PGDATA: /var/lib/postgresql/data
+    command: |
+      postgres 
+      -c wal_level=replica 
+      -c hot_standby=on 
+      -c max_wal_senders=10 
+      -c max_replication_slots=10 
+      -c hot_standby_feedback=on
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - postgres_network
+    restart: unless-stopped
+  postgres_replica1:
+    image: postgres:16-alpine
+    container_name: postgres_replica1
+    ports:
+      - '5434:5432'
+    volumes:
+      - C:\\postgres\\postgres_replica1_data:/var/lib/postgresql/data
+      - C:\\postgres\\pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - C:\\postgres\\postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: qwertyu
+      POSTGRES_DB: auth_db
+      TZ: Asia/Vientiane
+    command: |
+      bash -c "
+      until PGPASSWORD=qwertyu pg_basebackup --pgdata=/var/lib/postgresql/data -R --slot=replication_slot --host=172.27.0.1 --port=5433 --user=replicator_1
+      do
+      echo 'Waiting for primary to connect...'
+      sleep 1s
+      done
+      chown -R postgres:postgres /var/lib/postgresql/data
+      chmod 0700 /var/lib/postgresql/data
+      echo 'Backup done, starting replica...'
+      exec postgres
+      "
+    networks:
+      - postgres_network
+    restart: unless-stopped
+networks:
+  postgres_network:
+    driver: bridge
+volumes:
+  postgres_master_data:
+  postgres_replica1_data:
+  postgres_replica2_data:
