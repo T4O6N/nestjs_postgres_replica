@@ -15,3 +15,6 @@ $ npm install class-validator
 
 # install Config:
 $ npm install @nestjs/config
+
+# install timezone package:
+$ npm install moment-timezone
